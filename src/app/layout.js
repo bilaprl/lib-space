@@ -13,9 +13,19 @@ const openSans = Open_Sans({
   weight: ["400", "500", "600"],
 });
 
+// Metadata terpisah untuk SEO
 export const metadata = {
   title: "LibSpace: Real-time Library Seat Mapper",
   description: "Aplikasi pemesanan tempat perpustakaan secara real-time",
+};
+
+// Konfigurasi viewport khusus Next.js 14+ untuk responsivitas maksimal
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1, // Mengunci zoom maksimal (Mencegah layar nge-zoom saat map ditekan double tap di HP)
+  userScalable: false,
+  themeColor: "#064e3b", // Warna status bar di mobile (menyesuaikan warna emerald-950)
 };
 
 export default function RootLayout({ children }) {
@@ -29,7 +39,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body
-        className={`${montserrat.variable} ${openSans.variable} bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased`}
+        className={`${montserrat.variable} ${openSans.variable} bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased selection:bg-emerald-200 selection:text-emerald-900`}
       >
         {children}
       </body>

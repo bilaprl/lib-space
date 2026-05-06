@@ -12,20 +12,36 @@
   --color-brand-600: #16a34a;
   --color-brand-900: #14532d;
 
-  --color-status-available: #10B981;
-  --color-status-booking: #F59E0B;
-  --color-status-booked: #EF4444;
-  --color-status-favorite: #3B82F6;
+  --color-status-available: #10b981;
+  --color-status-booking: #f59e0b;
+  --color-status-booked: #ef4444;
+  --color-status-favorite: #3b82f6;
 
   /* Kustom shadow */
   --shadow-soft: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
 }
 
 @layer base {
+  html {
+    /* Scroll behavior halus saat bernavigasi */
+    scroll-behavior: smooth;
+    /* Mencegah font membesar otomatis pada mode landscape di mobile */
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     font-family: var(--font-body);
+    /* Menghindari efek 'overscroll bounce' bawaan browser mobile saat di-scroll mentok */
+    overscroll-behavior-y: none;
   }
-  h1, h2, h3, h4, h5, h6, .font-heading {
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  .font-heading {
     font-family: var(--font-heading);
   }
 }
@@ -34,6 +50,10 @@
   /* Seat Animations & Behaviors */
   .seat {
     @apply transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)];
+    /* Mencegah highlight kotak biru/abu-abu bawaan mobile saat di-tap */
+    -webkit-tap-highlight-color: transparent;
+    /* Mencegah teks ter-highlight tidak sengaja */
+    user-select: none;
   }
 
   .seat:hover:not(.booked) {
@@ -50,5 +70,15 @@
 
   .seat.booked {
     @apply bg-status-booked cursor-not-allowed opacity-80;
+  }
+
+  /* Utility tambahan untuk menyembunyikan scrollbar tapi tetap bisa di-scroll 
+     (Sangat berguna untuk container Peta dan Tabel Riwayat di layar kecil) */
+  .hide-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
   }
 }
