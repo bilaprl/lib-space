@@ -5,6 +5,11 @@ import { createClient } from "@supabase/supabase-js";
 import { io } from "socket.io-client";
 import AdminPanel from "./AdminPanel";
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
 // ==========================================
 // SUPABASE & BACKEND CONFIG
 // ==========================================
