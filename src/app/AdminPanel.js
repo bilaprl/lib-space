@@ -53,12 +53,8 @@ const seatsConfig = [
   { id: "50", label: "50", shape: "circle", x: "85.5%", y: "82%" },
 ];
 
-export default function AdminPanel({
-  seats,
-  onRelease,
-  onLogout,
-  activeUsers,
-}) {
+export default function AdminPanel({ seats, onRelease, onLogout, activeUsers, token }) {
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000";
   return (
     <div className="flex flex-col sm:flex-row h-screen bg-slate-50 font-sans overflow-hidden">
       {/* --- SIDEBAR TERANG ADMIN --- */}
