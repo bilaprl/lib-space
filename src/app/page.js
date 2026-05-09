@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { io } from "socket.io-client";
 import AdminPanel from "./AdminPanel";
 
 const supabase = createClient(
@@ -14,7 +13,7 @@ const supabase = createClient(
 // SUPABASE & BACKEND CONFIG
 // ==========================================
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
+const BACKEND_URL = "";
 const ALLOWED_DOMAINS = ["unsil.ac.id", "student.unsil.ac.id"];
 const isUniversityEmail = (email) =>
   ALLOWED_DOMAINS.includes(email?.split("@")[1]?.toLowerCase());
@@ -96,7 +95,6 @@ export default function Home() {
   const [history, setHistory] = useState([]);
   const [stats, setStats] = useState(null);
 
-  const socketRef = useRef(null);
   const currentUserRef = useRef(null);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
@@ -122,45 +120,70 @@ export default function Home() {
   }, []);
 
   // ==========================================
-  // SOCKET.IO — GANTI SETINTERVAL SIMULASI
+  // SUPABASE REALTIME + PRESENCE
+  // (PENGGANTI SOCKET.IO)
   // ==========================================
   useEffect(() => {
-    if (!isLoggedIn || !token) return;
+    if (!isLoggedIn) return;
 
-    const socket = io(BACKEND_URL, {
-      auth: { token },
-      transports: ["websocket", "polling"],
+    const channel = supabase.channel('libspace-realtime', {
+      config: {
+        presence: { key: currentUser?.id || 'guest' },
+      },
     });
-    socketRef.current = socket;
 
-    socket.on("seat_updated", ({ seats: updatedSeats }) => {
-      setSeats(updatedSeats);
-      const uid = currentUserRef.current?.id;
-      if (uid) {
-        setMyBookedSeats(
-          updatedSeats.filter((s) => s.locked_by === uid && s.status === "booked").map((s) => s.id)
-        );
-        setPendingSeats(
-          updatedSeats.filter((s) => s.locked_by === uid && s.status === "booking").map((s) => s.id)
-        );
+    // 1. Realtime: update kursi saat ada perubahan di tabel seats
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'seats' },
+      async () => {
+        const res = await fetch(`${BACKEND_URL}/api/seats`);
+        const { seats: data } = await res.json();
+        setSeats(data || []);
+        const uid = currentUserRef.current?.id;
+        if (uid) {
+          setMyBookedSeats(
+            data.filter((s) => s.locked_by === uid && s.status === 'booked').map((s) => s.id)
+          );
+          setPendingSeats(
+            data.filter((s) => s.locked_by === uid && s.status === 'booking').map((s) => s.id)
+          );
+        }
+      }
+    );
+
+    // 2. Presence: hitung jumlah user yang sedang buka web
+    channel.on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState();
+      setActiveUsers(Object.keys(state).length);
+    });
+
+    channel.on('presence', { event: 'join' }, () => {
+      const state = channel.presenceState();
+      setActiveUsers(Object.keys(state).length);
+    });
+
+    channel.on('presence', { event: 'leave' }, () => {
+      const state = channel.presenceState();
+      setActiveUsers(Object.keys(state).length);
+    });
+
+    // Subscribe dan daftarkan user ini sebagai online
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await channel.track({
+          user_id: currentUser?.id || 'guest',
+          nama: currentUser?.nama || 'Guest',
+          online_at: new Date().toISOString(),
+        });
       }
     });
 
-    socket.on("active_users", ({ count }) => setActiveUsers(count));
-
-    socket.on("kicked", ({ message }) => {
-      setMyBookedSeats([]);
-      setPendingSeats([]);
-      alert(`⚠️ ${message}`);
-    });
-
-    socket.on("booking_expired", ({ seatId }) => {
-      setPendingSeats((prev) => prev.filter((id) => id !== seatId));
-      alert(`⏰ Waktu booking kursi ${seatId} habis. Kursi dilepas otomatis.`);
-    });
-
-    return () => socket.disconnect();
-  }, [isLoggedIn, token]);
+    return () => {
+      channel.untrack();
+      supabase.removeChannel(channel);
+    };
+  }, [isLoggedIn, currentUser]);
 
   // ==========================================
   // FETCH KURSI AWAL
@@ -245,14 +268,14 @@ export default function Home() {
   // LOGIN GOOGLE OAUTH VIA SUPABASE
   // ==========================================
   const handleGoogleLogin = async () => {
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: { 
-      redirectTo: `${window.location.origin}/auth/callback`
-    },
-  });
-  if (error) setLoginError("Gagal login dengan Google: " + error.message);
-};
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      },
+    });
+    if (error) setLoginError("Gagal login dengan Google: " + error.message);
+  };
 
   // ==========================================
   // LOGOUT
@@ -260,7 +283,6 @@ export default function Home() {
   const handleLogout = () => {
     localStorage.removeItem("libspace_token");
     localStorage.removeItem("libspace_user");
-    if (socketRef.current) socketRef.current.disconnect();
     setIsLoggedIn(false);
     setCurrentUser(null);
     setToken(null);
@@ -296,17 +318,14 @@ export default function Home() {
   const handleSeatClick = async (seatId) => {
     if (activeTab !== "map") return;
 
-    // 1. Definisikan variabel 'seat' dulu agar tidak "undefined"
     const seat = seats.find((s) => s.id === seatId);
     if (!seat) return;
 
-    // 2. Baru lakukan pengecekan role
     if (currentUser?.role !== 'student' && currentUser?.role !== 'admin') {
       alert("Akses ditolak. Role Anda saat ini: " + currentUser?.role);
       return;
     }
 
-    // 3. Logika pengecekan status kursi selanjutnya
     if (myBookedSeats.length > 0) {
       alert("Anda sudah memiliki reservasi aktif. Selesaikan atau tinggalkan kursi Anda saat ini terlebih dahulu.");
       return;
@@ -462,14 +481,12 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Pesan Error */}
               {loginError && (
                 <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 font-medium">
                   {loginError}
                 </div>
               )}
 
-              {/* Tombol Google */}
               <button
                 onClick={handleGoogleLogin}
                 className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold py-3.5 px-6 rounded-2xl flex items-center justify-center gap-3 transition-all shadow-sm mb-6 group text-sm sm:text-base"

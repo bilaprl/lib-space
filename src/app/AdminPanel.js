@@ -1,5 +1,13 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
 const seatsConfig = [
   { id: "1", label: "1", shape: "square", x: "10.5%", y: "17%" },
   { id: "2", label: "2", shape: "square", x: "15.5%", y: "17%" },
@@ -53,8 +61,29 @@ const seatsConfig = [
   { id: "50", label: "50", shape: "circle", x: "85.5%", y: "82%" },
 ];
 
+
 export default function AdminPanel({ seats, onRelease, onLogout, activeUsers, token }) {
-  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000";
+  const [bookedSeats, setBookedSeats] = useState([]);
+  useEffect(() => {
+  const channel = supabase.channel('seats-realtime');
+
+  channel.on('presence', { event: 'sync' }, () => {
+    const state = channel.presenceState();
+    // update count di admin - tapi activeUsers sudah di-pass dari page.js
+  });
+
+  channel.on('postgres_changes',
+    { event: '*', schema: 'public', table: 'seats' },
+    async () => {
+      const res = await fetch('/api/seats');
+      const { seats: data } = await res.json();
+      setBookedSeats(data || []);
+    }
+  ).subscribe();
+
+  return () => supabase.removeChannel(channel);
+}, []);
+  const BACKEND_URL = "";
   return (
     <div className="flex flex-col sm:flex-row h-screen bg-slate-50 font-sans overflow-hidden">
       {/* --- SIDEBAR TERANG ADMIN --- */}
