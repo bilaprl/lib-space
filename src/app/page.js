@@ -15,7 +15,7 @@ const supabase = createClient(
 // ==========================================
 
 const BACKEND_URL = "";
-const SOCKET_URL = "http://localhost:3001";
+const SOCKET_URL = "";
 const ALLOWED_DOMAINS = ["unsil.ac.id", "student.unsil.ac.id"];
 const isUniversityEmail = (email) =>
   ALLOWED_DOMAINS.includes(email?.split("@")[1]?.toLowerCase());

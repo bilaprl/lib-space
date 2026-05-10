@@ -8,44 +8,56 @@ export async function POST(request) {
       return jsonResponse({ error: 'Email tidak ditemukan' }, 400);
 
     if (!isUniversityEmail(email))
-      return jsonResponse({ error: 'Hanya email universitas (@unsil.ac.id) yang diizinkan' }, 403);
+      return jsonResponse({ error: 'Hanya email universitas (@unsil.ac.id atau @student.unsil.ac.id) yang diizinkan' }, 403);
 
     // Cek apakah user sudah ada
-    let { data: user } = await supabase
+    const { data: existingUser, error: findError } = await supabase
       .from('users')
       .select('*')
       .eq('email', email.toLowerCase())
-      .single();
+      .maybeSingle();
+
+    let user = existingUser;
 
     if (!user) {
-      // Register otomatis user baru
+      // Register otomatis user baru — hanya kolom yang pasti ada di tabel
+      const insertData = {
+        email: email.toLowerCase(),
+        nama: nama || email.split('@')[0],
+        role: 'mahasiswa',
+        is_active: true,
+      };
+
+      // Tambahkan kolom opsional hanya jika ada nilainya
+      if (google_id) insertData.google_id = google_id;
+      if (avatar_url) insertData.avatar_url = avatar_url;
+
       const { data: newUser, error: createError } = await supabase
         .from('users')
-        .insert({
-          email: email.toLowerCase(),
-          nama: nama || email,
-          role: 'mahasiswa',
-          google_id,
-          avatar_url,
-          is_active: true,
-        })
+        .insert(insertData)
         .select()
         .single();
 
       if (createError) {
-        return jsonResponse({ error: 'Gagal membuat akun baru' }, 500);
+        return jsonResponse({ error: 'Gagal membuat akun: ' + createError.message }, 500);
       }
       user = newUser;
     } else {
       // Update avatar dan google_id jika berubah
-      await supabase
-        .from('users')
-        .update({ avatar_url, google_id })
-        .eq('id', user.id);
+      const updateData = {};
+      if (avatar_url) updateData.avatar_url = avatar_url;
+      if (google_id) updateData.google_id = google_id;
+      
+      if (Object.keys(updateData).length > 0) {
+        await supabase
+          .from('users')
+          .update(updateData)
+          .eq('id', user.id);
+      }
     }
 
     if (!user.is_active)
-      return jsonResponse({ error: 'Akun Anda telah dinonaktifkan' }, 403);
+      return jsonResponse({ error: 'Akun Anda telah dinonaktifkan oleh admin' }, 403);
 
     const token = generateToken(user);
     return jsonResponse({
@@ -60,7 +72,7 @@ export async function POST(request) {
       },
     });
   } catch (err) {
-    return jsonResponse({ error: 'Kesalahan server' }, 500);
+    return jsonResponse({ error: 'Kesalahan server: ' + err.message }, 500);
   }
 }
 
