@@ -21,7 +21,6 @@ export async function PATCH(request, { params }) {
       message: `Akun ${!target.is_active ? 'diaktifkan' : 'dinonaktifkan'}`,
     });
   } catch (err) {
-    console.error('toggleUser error:', err);
     return jsonResponse({ error: 'Gagal mengubah status user' }, 500);
   }
 }

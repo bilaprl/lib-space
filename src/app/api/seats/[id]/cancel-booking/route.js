@@ -14,23 +14,17 @@ export async function DELETE(request, { params }) {
     const { id } = await params;
     const seatId = parseInt(id);
 
-    console.log('[CANCEL] User:', userId, '| Seat:', seatId);
-
-    const { data, error } = await supabase.from('seats')
+    const { error } = await supabase.from('seats')
       .update({ status: 'available', locked_by: null, lock_expires_at: null })
       .eq('id', seatId)
-      .eq('locked_by', userId)
-      .select();
+      .eq('locked_by', userId);
 
     if (error) {
-      console.log('[CANCEL] Error:', error);
       return Response.json({ error: error.message }, { status: 500 });
     }
 
-    console.log('[CANCEL] Success, released:', data?.length, 'seats');
     return Response.json({ message: 'Pilihan kursi dibatalkan' });
   } catch (err) {
-    console.error('[CANCEL] Catch:', err);
     return Response.json({ error: err.message }, { status: 500 });
   }
 }

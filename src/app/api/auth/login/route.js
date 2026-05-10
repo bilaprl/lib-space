@@ -101,7 +101,6 @@ export async function POST(request) {
       },
     });
   } catch (err) {
-    console.error('login error:', err);
     return jsonResponse({ error: 'Kesalahan server: ' + err.message }, 500);
   }
 }

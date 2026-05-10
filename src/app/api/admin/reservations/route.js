@@ -28,7 +28,6 @@ export async function GET(request) {
       pagination: { page, limit, total: count || 0 },
     });
   } catch (err) {
-    console.error('getAllReservations error:', err);
     return jsonResponse({ error: 'Gagal mengambil data reservasi' }, 500);
   }
 }

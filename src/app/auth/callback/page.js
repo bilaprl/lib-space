@@ -14,7 +14,6 @@ export default function AuthCallback() {
         const accessToken = params.get('access_token');
 
         if (!accessToken) {
-          console.error("Tidak ada access token di URL");
           window.location.href = "/";
           return;
         }
@@ -49,7 +48,6 @@ export default function AuthCallback() {
         window.location.href = "/";
 
       } catch (err) {
-        console.error("Callback error:", err);
         alert("Terjadi kesalahan saat login: " + err.message);
         window.location.href = "/";
       }

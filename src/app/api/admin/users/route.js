@@ -21,7 +21,6 @@ export async function GET(request) {
 
     return jsonResponse({ users: data || [], pagination: { page, limit, total: count || 0 } });
   } catch (err) {
-    console.error('getUsers error:', err);
     return jsonResponse({ error: 'Gagal mengambil daftar user' }, 500);
   }
 }

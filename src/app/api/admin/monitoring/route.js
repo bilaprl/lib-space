@@ -45,7 +45,6 @@ export async function GET(request) {
       },
     });
   } catch (err) {
-    console.error('getMonitoring error:', err);
     return jsonResponse({ error: 'Gagal mengambil data monitoring' }, 500);
   }
 }

@@ -119,7 +119,7 @@ export default function Home() {
         setPendingSeats(normalized.filter((s) => s.locked_by === uid && s.status === 'booking').map((s) => s.id));
       }
     } catch (err) {
-      console.error('fetchSeats error:', err);
+      // silent
     }
   }, []);
 
@@ -214,25 +214,25 @@ export default function Home() {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('✅ Socket.io connected:', socket.id);
+      // connected
       // Kirim userId agar server bisa hitung user unik
       const uid = currentUserRef.current?.id;
       if (uid) socket.emit('register_user', uid);
     });
 
     socket.on('connect_error', (err) => {
-      console.error('❌ Socket.io connection error:', err.message);
+      // connection error - silent
     });
 
     // Saat ada user lain yang mengubah kursi, re-fetch data
     socket.on('seat_updated', () => {
-      console.log('🔄 Seat update received, refreshing...');
+      // seat update received
       fetchSeats();
     });
 
     // Update jumlah user yang sedang online
     socket.on('active_users', (count) => {
-      console.log('👥 Active users:', count);
+      // active users updated
       setActiveUsers(count);
     });
 
@@ -260,7 +260,7 @@ export default function Home() {
     })
       .then((r) => r.json())
       .then(({ history: data }) => setHistory(data || []))
-      .catch(console.error);
+      .catch(() => {});
   }, [activeTab, token]);
 
   // ==========================================
@@ -273,7 +273,7 @@ export default function Home() {
     })
       .then((r) => r.json())
       .then((data) => setStats(data))
-      .catch(console.error);
+      .catch(() => {});
   }, [activeTab, token]);
 
   const availableCount = seats.filter((s) => s.status === "available").length;
@@ -427,7 +427,7 @@ export default function Home() {
       );
       notifySeatChange();
     } catch (err) {
-      console.error(err);
+      // silent
     }
     setIsModalOpen(false);
   };

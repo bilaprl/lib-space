@@ -74,7 +74,7 @@ export default function AdminPanel({ seats, onRelease, onLogout, activeUsers: pr
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('✅ Admin Socket connected:', socket.id);
+      // connected
     });
 
     socket.on('active_users', (count) => {

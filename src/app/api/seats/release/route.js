@@ -12,10 +12,7 @@ export async function POST(request) {
     const userId = decoded.id;
 
     const { seatIds } = await request.json();
-    // Normalize ke integer
     const intSeatIds = seatIds.map(id => parseInt(id));
-
-    console.log('[RELEASE] User:', userId, '| Seats:', intSeatIds);
 
     await supabase.from('seats')
       .update({ status: 'available', locked_by: null, lock_expires_at: null })
@@ -25,10 +22,8 @@ export async function POST(request) {
       .update({ status: 'completed', ended_at: new Date().toISOString() })
       .in('seat_id', intSeatIds).eq('user_id', userId).eq('status', 'active');
 
-    console.log('[RELEASE] Success!');
     return Response.json({ message: 'Kursi berhasil dilepas' });
   } catch (err) {
-    console.error('[RELEASE] Error:', err);
     return Response.json({ error: err.message }, { status: 500 });
   }
 }

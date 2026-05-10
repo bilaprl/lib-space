@@ -33,7 +33,6 @@ export async function POST(request) {
         .single();
 
       if (createError) {
-        console.error('register error:', createError);
         return jsonResponse({ error: 'Gagal membuat akun baru' }, 500);
       }
       user = newUser;
@@ -61,7 +60,6 @@ export async function POST(request) {
       },
     });
   } catch (err) {
-    console.error('google-supabase error:', err);
     return jsonResponse({ error: 'Kesalahan server' }, 500);
   }
 }
