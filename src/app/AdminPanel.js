@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
 
-const SOCKET_URL = "http://localhost:3001";
+const SOCKET_URL = typeof window !== 'undefined' ? window.location.origin : "";
 
 const seatsConfig = [
   { id: "1", label: "1", shape: "square", x: "10.5%", y: "17%" },
