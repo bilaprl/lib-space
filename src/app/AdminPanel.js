@@ -1,12 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { useState, useEffect, useRef } from "react";
+import { io } from "socket.io-client";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const SOCKET_URL = "http://localhost:3001";
 
 const seatsConfig = [
   { id: "1", label: "1", shape: "square", x: "10.5%", y: "17%" },
@@ -61,29 +58,37 @@ const seatsConfig = [
   { id: "50", label: "50", shape: "circle", x: "85.5%", y: "82%" },
 ];
 
+export default function AdminPanel({ seats, onRelease, onLogout, activeUsers: propActiveUsers, token }) {
+  const [localActiveUsers, setLocalActiveUsers] = useState(propActiveUsers);
+  const socketRef = useRef(null);
 
-export default function AdminPanel({ seats, onRelease, onLogout, activeUsers, token }) {
-  const [bookedSeats, setBookedSeats] = useState([]);
+  // Socket.io: Real-time updates
   useEffect(() => {
-  const channel = supabase.channel('seats-realtime');
+    if (typeof window === 'undefined') return;
 
-  channel.on('presence', { event: 'sync' }, () => {
-    const state = channel.presenceState();
-    // update count di admin - tapi activeUsers sudah di-pass dari page.js
-  });
+    const socket = io(SOCKET_URL, {
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+      withCredentials: false,
+    });
+    socketRef.current = socket;
 
-  channel.on('postgres_changes',
-    { event: '*', schema: 'public', table: 'seats' },
-    async () => {
-      const res = await fetch('/api/seats');
-      const { seats: data } = await res.json();
-      setBookedSeats(data || []);
-    }
-  ).subscribe();
+    socket.on('connect', () => {
+      console.log('✅ Admin Socket connected:', socket.id);
+    });
 
-  return () => supabase.removeChannel(channel);
-}, []);
-  const BACKEND_URL = "";
+    socket.on('active_users', (count) => {
+      setLocalActiveUsers(count);
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
+
+  // Gunakan Socket.io count jika tersedia, fallback ke props
+  const activeUsers = localActiveUsers ?? propActiveUsers;
   return (
     <div className="flex flex-col sm:flex-row h-screen bg-slate-50 font-sans overflow-hidden">
       {/* --- SIDEBAR TERANG ADMIN --- */}

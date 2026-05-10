@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { io } from "socket.io-client";
 import AdminPanel from "./AdminPanel";
 
 const supabase = createClient(
@@ -14,6 +15,7 @@ const supabase = createClient(
 // ==========================================
 
 const BACKEND_URL = "";
+const SOCKET_URL = "http://localhost:3001";
 const ALLOWED_DOMAINS = ["unsil.ac.id", "student.unsil.ac.id"];
 const isUniversityEmail = (email) =>
   ALLOWED_DOMAINS.includes(email?.split("@")[1]?.toLowerCase());
@@ -94,9 +96,43 @@ export default function Home() {
   const [activeUsers, setActiveUsers] = useState(0);
   const [history, setHistory] = useState([]);
   const [stats, setStats] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const HISTORY_PER_PAGE = 5;
 
   const currentUserRef = useRef(null);
+  const socketRef = useRef(null);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+
+  // Helper: Ambil data kursi dari API
+  const fetchSeats = useCallback(async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/seats`);
+      const { seats: data } = await res.json();
+      // Normalize ID ke string agar cocok dengan seatsConfig
+      const normalized = (data || []).map(s => ({ ...s, id: String(s.id) }));
+      setSeats(normalized);
+      const uid = currentUserRef.current?.id;
+      if (uid) {
+        setMyBookedSeats(normalized.filter((s) => s.locked_by === uid && s.status === 'booked').map((s) => s.id));
+        setPendingSeats(normalized.filter((s) => s.locked_by === uid && s.status === 'booking').map((s) => s.id));
+      }
+    } catch (err) {
+      console.error('fetchSeats error:', err);
+    }
+  }, []);
+
+  // Helper: Beritahu semua user ada perubahan kursi
+  const notifySeatChange = useCallback(() => {
+    socketRef.current?.emit('seat_changed');
+    fetchSeats();
+  }, [fetchSeats]);
+
+  // Toast notification system
+  const showToast = useCallback((message, type = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
 
   // ==========================================
   // RESTORE SESSION DARI LOCALSTORAGE
@@ -120,88 +156,56 @@ export default function Home() {
   }, []);
 
   // ==========================================
-  // SUPABASE REALTIME + PRESENCE
-  // (PENGGANTI SOCKET.IO)
+  // SOCKET.IO: REAL-TIME UPDATES
   // ==========================================
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn || typeof window === 'undefined') return;
 
-    const channel = supabase.channel('libspace-realtime', {
-      config: {
-        presence: { key: currentUser?.id || 'guest' },
-      },
+    const socket = io(SOCKET_URL, {
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      withCredentials: false,
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('✅ Socket.io connected:', socket.id);
+      // Kirim userId agar server bisa hitung user unik
+      const uid = currentUserRef.current?.id;
+      if (uid) socket.emit('register_user', uid);
     });
 
-    // 1. Realtime: update kursi saat ada perubahan di tabel seats
-    channel.on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'seats' },
-      async () => {
-        const res = await fetch(`${BACKEND_URL}/api/seats`);
-        const { seats: data } = await res.json();
-        setSeats(data || []);
-        const uid = currentUserRef.current?.id;
-        if (uid) {
-          setMyBookedSeats(
-            data.filter((s) => s.locked_by === uid && s.status === 'booked').map((s) => s.id)
-          );
-          setPendingSeats(
-            data.filter((s) => s.locked_by === uid && s.status === 'booking').map((s) => s.id)
-          );
-        }
-      }
-    );
-
-    // 2. Presence: hitung jumlah user yang sedang buka web
-    channel.on('presence', { event: 'sync' }, () => {
-      const state = channel.presenceState();
-      setActiveUsers(Object.keys(state).length);
+    socket.on('connect_error', (err) => {
+      console.error('❌ Socket.io connection error:', err.message);
     });
 
-    channel.on('presence', { event: 'join' }, () => {
-      const state = channel.presenceState();
-      setActiveUsers(Object.keys(state).length);
+    // Saat ada user lain yang mengubah kursi, re-fetch data
+    socket.on('seat_updated', () => {
+      console.log('🔄 Seat update received, refreshing...');
+      fetchSeats();
     });
 
-    channel.on('presence', { event: 'leave' }, () => {
-      const state = channel.presenceState();
-      setActiveUsers(Object.keys(state).length);
-    });
-
-    // Subscribe dan daftarkan user ini sebagai online
-    channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await channel.track({
-          user_id: currentUser?.id || 'guest',
-          nama: currentUser?.nama || 'Guest',
-          online_at: new Date().toISOString(),
-        });
-      }
+    // Update jumlah user yang sedang online
+    socket.on('active_users', (count) => {
+      console.log('👥 Active users:', count);
+      setActiveUsers(count);
     });
 
     return () => {
-      channel.untrack();
-      supabase.removeChannel(channel);
+      socket.disconnect();
+      socketRef.current = null;
     };
-  }, [isLoggedIn, currentUser]);
+  }, [isLoggedIn, fetchSeats]);
 
   // ==========================================
   // FETCH KURSI AWAL
   // ==========================================
   useEffect(() => {
     if (!isLoggedIn) return;
-    fetch(`${BACKEND_URL}/api/seats`)
-      .then((r) => r.json())
-      .then(({ seats: data }) => {
-        setSeats(data || []);
-        const uid = currentUserRef.current?.id;
-        if (uid) {
-          setMyBookedSeats(data.filter((s) => s.locked_by === uid && s.status === "booked").map((s) => s.id));
-          setPendingSeats(data.filter((s) => s.locked_by === uid && s.status === "booking").map((s) => s.id));
-        }
-      })
-      .catch(console.error);
-  }, [isLoggedIn]);
+    fetchSeats();
+  }, [isLoggedIn, fetchSeats]);
 
   // ==========================================
   // FETCH RIWAYAT SAAT TAB HISTORY DIBUKA
@@ -299,7 +303,7 @@ export default function Home() {
   // ==========================================
   const adminForceRelease = async (seatId) => {
     try {
-      await fetch(`${BACKEND_URL}/api/admin/seats/kick`, {
+      const res = await fetch(`${BACKEND_URL}/api/admin/seats/kick`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -307,8 +311,9 @@ export default function Home() {
         },
         body: JSON.stringify({ seatId }),
       });
+      if (res.ok) notifySeatChange();
     } catch (err) {
-      alert("Gagal kick kursi: " + err.message);
+      showToast("Gagal kick kursi: " + err.message);
     }
   };
 
@@ -322,12 +327,12 @@ export default function Home() {
     if (!seat) return;
 
     if (currentUser?.role !== 'student' && currentUser?.role !== 'admin') {
-      alert("Akses ditolak. Role Anda saat ini: " + currentUser?.role);
+      showToast("Akses ditolak. Role Anda saat ini: " + currentUser?.role);
       return;
     }
 
     if (myBookedSeats.length > 0) {
-      alert("Anda sudah memiliki reservasi aktif. Selesaikan atau tinggalkan kursi Anda saat ini terlebih dahulu.");
+      showToast("Anda sudah memiliki reservasi aktif. Selesaikan dulu sebelum memilih kursi baru.", "warning");
       return;
     }
 
@@ -337,8 +342,9 @@ export default function Home() {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
         });
+        notifySeatChange();
       } catch (err) {
-        alert(err.message);
+        showToast(err.message);
       }
       return;
     }
@@ -346,7 +352,7 @@ export default function Home() {
     if (seat.status !== "available") return;
 
     if (pendingSeats.length >= 3) {
-      alert("Maksimal pemesanan dalam satu waktu adalah 3 kursi.");
+      showToast("Maksimal pemesanan dalam satu waktu adalah 3 kursi.", "warning");
       return;
     }
 
@@ -357,8 +363,9 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      notifySeatChange();
     } catch (err) {
-      alert(err.message);
+      showToast(err.message);
     }
   };
 
@@ -375,6 +382,7 @@ export default function Home() {
           })
         )
       );
+      notifySeatChange();
     } catch (err) {
       console.error(err);
     }
@@ -396,9 +404,10 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      notifySeatChange();
       setIsModalOpen(false);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message);
     }
   };
 
@@ -417,8 +426,9 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      notifySeatChange();
     } catch (err) {
-      alert(err.message);
+      showToast(err.message);
     }
   };
 
@@ -768,7 +778,7 @@ export default function Home() {
                             Belum ada riwayat reservasi.
                           </td>
                         </tr>
-                      ) : history.map((item, idx) => (
+                      ) : history.slice((historyPage - 1) * HISTORY_PER_PAGE, historyPage * HISTORY_PER_PAGE).map((item, idx) => (
                         <tr key={idx} className="border-b border-slate-50 hover:bg-emerald-50/50 transition-colors group">
                           <td className="py-4 sm:py-5 px-2 sm:px-4 font-bold text-slate-900 text-sm sm:text-base">{item.id}</td>
                           <td className="py-4 sm:py-5 px-2 sm:px-4">
@@ -783,7 +793,7 @@ export default function Home() {
                           </td>
                           <td className="py-4 sm:py-5 px-2 sm:px-4 font-semibold text-slate-700 text-sm sm:text-base">{item.duration}</td>
                           <td className="py-4 sm:py-5 px-2 sm:px-4 text-right">
-                            <span className={`inline-flex items-center px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold ${item.status === "Selesai" ? "bg-emerald-100 text-emerald-700" : item.status === "Aktif" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`}>
+                            <span className={`inline-flex items-center px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold ${item.status === "Selesai" ? "bg-emerald-100 text-emerald-700" : item.status === "Aktif" ? "bg-blue-100 text-blue-700" : item.status === "Batal" ? "bg-rose-100 text-rose-600" : "bg-slate-100 text-slate-500"}`}>
                               {item.status}
                             </span>
                           </td>
@@ -792,6 +802,44 @@ export default function Home() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* PAGINATION */}
+                {history.length > HISTORY_PER_PAGE && (
+                  <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
+                    <p className="text-xs sm:text-sm text-slate-400 font-medium">
+                      Menampilkan {Math.min((historyPage - 1) * HISTORY_PER_PAGE + 1, history.length)}-{Math.min(historyPage * HISTORY_PER_PAGE, history.length)} dari {history.length} data
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                        disabled={historyPage === 1}
+                        className="w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                      >
+                        <span className="material-symbols-outlined text-lg">chevron_left</span>
+                      </button>
+                      {Array.from({ length: Math.ceil(history.length / HISTORY_PER_PAGE) }, (_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setHistoryPage(i + 1)}
+                          className={`w-9 h-9 rounded-xl text-xs font-bold transition-all ${
+                            historyPage === i + 1
+                              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
+                              : 'border border-slate-200 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600'
+                          }`}
+                        >
+                          {i + 1}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setHistoryPage(p => Math.min(Math.ceil(history.length / HISTORY_PER_PAGE), p + 1))}
+                        disabled={historyPage >= Math.ceil(history.length / HISTORY_PER_PAGE)}
+                        className="w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                      >
+                        <span className="material-symbols-outlined text-lg">chevron_right</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
           )}
@@ -850,19 +898,33 @@ export default function Home() {
                     {new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
                   </div>
                 </div>
-                <div className="flex items-end justify-between h-40 sm:h-48 gap-1 sm:gap-6 mt-4 sm:mt-6 pb-2 border-b border-slate-100">
+                <div className="flex items-end gap-2 sm:gap-6 mt-4 sm:mt-6 pb-2 border-b border-slate-100" style={{ height: '180px' }}>
                   {(stats?.last7Days || [
                     { day: "Sen", hours: 0 }, { day: "Sel", hours: 0 }, { day: "Rab", hours: 0 },
                     { day: "Kam", hours: 0 }, { day: "Jum", hours: 0 }, { day: "Sab", hours: 0 }, { day: "Min", hours: 0 },
-                  ]).map((item, i) => {
-                    const maxH = Math.max(...(stats?.last7Days || []).map((d) => d.hours), 1);
-                    const pct = Math.round((item.hours / maxH) * 100);
+                  ]).map((item, i, arr) => {
+                    const maxH = Math.max(...arr.map((d) => d.hours), 1);
+                    const pct = item.hours > 0 ? Math.max(Math.round((item.hours / maxH) * 100), 12) : 6;
+                    const isToday = i === arr.length - 1;
                     return (
-                      <div key={i} className="flex flex-col items-center flex-1 group">
-                        <div className="w-full max-w-[24px] sm:max-w-[40px] bg-slate-100 rounded-t-lg sm:rounded-t-xl overflow-hidden flex items-end relative h-full">
-                          <div className="w-full bg-emerald-400 group-hover:bg-emerald-500 transition-all rounded-t-lg sm:rounded-t-xl" style={{ height: `${pct || 5}%` }}></div>
+                      <div key={i} className="flex flex-col items-center flex-1 group cursor-default h-full justify-end relative">
+                        {/* Tooltip on hover */}
+                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 text-[9px] sm:text-[10px] font-bold text-white bg-slate-700 px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                          {item.hours > 0 ? `${item.hours} jam` : '0 jam'}
                         </div>
-                        <span className="mt-2 sm:mt-4 text-[9px] sm:text-xs font-bold text-slate-400">{item.day}</span>
+                        {/* Bar */}
+                        <div
+                          className={`w-6 sm:w-10 rounded-t-lg sm:rounded-t-xl transition-all duration-500 ${
+                            isToday ? 'bg-emerald-500 group-hover:bg-emerald-400 shadow-lg shadow-emerald-200' :
+                            item.hours > 0 ? 'bg-emerald-400 group-hover:bg-emerald-500' :
+                            'bg-slate-200 group-hover:bg-slate-300'
+                          }`}
+                          style={{ height: `${pct}%`, minHeight: '8px' }}
+                        ></div>
+                        {/* Day label */}
+                        <span className={`mt-2 sm:mt-3 text-[9px] sm:text-xs font-bold ${
+                          isToday ? 'text-emerald-600' : 'text-slate-400'
+                        }`}>{item.day}</span>
                       </div>
                     );
                   })}
@@ -889,17 +951,25 @@ export default function Home() {
 
       {/* FLOATING ACTION BAR */}
       {activeTab === "map" && pendingSeats.length > 0 && !isModalOpen && (
-        <div className="fixed bottom-24 sm:bottom-10 left-1/2 -translate-x-1/2 sm:left-auto sm:-translate-x-0 sm:right-10 bg-white border border-slate-200 p-2 sm:p-2.5 pl-6 sm:pl-8 pr-2 sm:pr-2.5 rounded-full shadow-2xl flex items-center gap-4 sm:gap-8 z-50 animate-[bounce_1s_ease-in-out_infinite] w-max max-w-[90vw]">
+        <div className="fixed bottom-24 sm:bottom-10 left-1/2 -translate-x-1/2 bg-white border border-slate-200 p-2 sm:p-2.5 pl-6 sm:pl-8 pr-2 sm:pr-2.5 rounded-full shadow-2xl flex items-center gap-4 sm:gap-6 z-50 animate-[bounce_1s_ease-in-out_infinite] w-max max-w-[90vw]">
           <div className="flex items-center gap-3 sm:gap-4">
             <div className="bg-emerald-100 text-emerald-700 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-black text-xs sm:text-sm">{pendingSeats.length}</div>
             <span className="font-bold text-xs sm:text-sm text-slate-700 tracking-wide block">Kursi Dipilih</span>
           </div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-full font-black text-xs sm:text-sm transition-all shadow-[0_5px_15px_rgba(5,150,105,0.3)] flex items-center gap-1 sm:gap-2 hover:scale-105 whitespace-nowrap"
-          >
-            Checkout <span className="material-symbols-outlined text-base sm:text-lg">arrow_forward</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={cancelAllPending}
+              className="bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-full font-bold text-xs sm:text-sm transition-all flex items-center gap-1 sm:gap-2 hover:scale-105 whitespace-nowrap"
+            >
+              <span className="material-symbols-outlined text-base sm:text-lg">close</span> Batal
+            </button>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-full font-black text-xs sm:text-sm transition-all shadow-[0_5px_15px_rgba(5,150,105,0.3)] flex items-center gap-1 sm:gap-2 hover:scale-105 whitespace-nowrap"
+            >
+              Checkout <span className="material-symbols-outlined text-base sm:text-lg">arrow_forward</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -957,7 +1027,32 @@ export default function Home() {
       <style dangerouslySetInnerHTML={{ __html: `
         @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0');
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideInRight { from { opacity: 0; transform: translateX(100px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes slideOutRight { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100px); } }
       `}} />
+
+      {/* CUSTOM TOAST NOTIFICATION */}
+      {toast && (
+        <div className="fixed top-6 right-6 z-[200] animate-[slideInRight_0.3s_ease-out]">
+          <div className={`flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl border backdrop-blur-md max-w-sm ${
+            toast.type === 'success' ? 'bg-emerald-50/95 border-emerald-200 text-emerald-800' :
+            toast.type === 'warning' ? 'bg-amber-50/95 border-amber-200 text-amber-800' :
+            'bg-rose-50/95 border-rose-200 text-rose-800'
+          }`}>
+            <span className={`material-symbols-outlined text-xl flex-shrink-0 ${
+              toast.type === 'success' ? 'text-emerald-500' :
+              toast.type === 'warning' ? 'text-amber-500' :
+              'text-rose-500'
+            }`}>
+              {toast.type === 'success' ? 'check_circle' : toast.type === 'warning' ? 'warning' : 'error'}
+            </span>
+            <p className="text-sm font-semibold leading-snug">{toast.message}</p>
+            <button onClick={() => setToast(null)} className="ml-2 text-current opacity-40 hover:opacity-100 transition-opacity flex-shrink-0">
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

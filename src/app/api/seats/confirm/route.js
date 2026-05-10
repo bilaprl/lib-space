@@ -12,12 +12,16 @@ export async function POST(request) {
     const userId = decoded.id;
 
     const { seatIds, durationType } = await request.json();
+    // Normalize ke integer
+    const intSeatIds = seatIds.map(id => parseInt(id));
+
+    console.log('[CONFIRM] User:', userId, '| Seats:', intSeatIds, '| Duration:', durationType);
 
     await supabase.from('seats')
       .update({ status: 'booked', lock_expires_at: null })
-      .in('id', seatIds).eq('locked_by', userId);
+      .in('id', intSeatIds).eq('locked_by', userId);
 
-    const rows = seatIds.map((seatId) => ({
+    const rows = intSeatIds.map((seatId) => ({
       user_id: userId, seat_id: seatId, status: 'active',
       duration_type: durationType, started_at: new Date().toISOString(),
     }));
@@ -25,8 +29,10 @@ export async function POST(request) {
     const { data, error } = await supabase.from('reservations').insert(rows).select();
     if (error) throw error;
 
+    console.log('[CONFIRM] Success! Reservations:', data?.length);
     return Response.json({ message: 'Reservasi dikonfirmasi', reservations: data });
   } catch (err) {
+    console.error('[CONFIRM] Error:', err);
     return Response.json({ error: err.message }, { status: 500 });
   }
 }
