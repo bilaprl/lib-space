@@ -285,7 +285,7 @@ export default function Home() {
     e.preventDefault();
     setLoginError("");
     const identifier = loginForm.identifier.trim();
-    if (identifier.includes("@") && !isUniversityEmail(identifier)) {
+    if (!identifier.includes("@") || !isUniversityEmail(identifier)) {
       setLoginError("Gunakan email universitas (@unsil.ac.id atau @student.unsil.ac.id)");
       return;
     }
@@ -561,9 +561,9 @@ export default function Home() {
               <form onSubmit={handleAuth} className="space-y-4">
                 <div>
                   <input
-                    type="text"
+                    type="email"
                     required
-                    placeholder="NPM / Email Universitas"
+                    placeholder="Email Universitas"
                     value={loginForm.identifier}
                     onChange={(e) => setLoginForm({ ...loginForm, identifier: e.target.value })}
                     className="w-full bg-white border border-slate-300 text-slate-900 placeholder-slate-400 rounded-2xl px-5 py-3.5 sm:py-4 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm text-sm sm:text-base"
@@ -654,7 +654,7 @@ export default function Home() {
             </div>
             <div className="hidden lg:block overflow-hidden">
               <p className="text-sm font-bold text-slate-800 truncate">{currentUser?.nama || "Pengguna"}</p>
-              <p className="text-xs text-slate-400 truncate">{currentUser?.npm || currentUser?.email || ""}</p>
+              <p className="text-xs text-slate-400 truncate">{currentUser?.email || ""}</p>
             </div>
           </div>
 

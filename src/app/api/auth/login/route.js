@@ -21,7 +21,7 @@ export async function POST(request) {
     const { identifier, password } = await request.json();
 
     if (!identifier || !password)
-      return jsonResponse({ error: 'Email/NPM dan password wajib diisi' }, 400);
+      return jsonResponse({ error: 'Email dan password wajib diisi' }, 400);
 
     // ── 1. Cek Hardcoded Admin (TIDAK DIGANGGU) ──
     const adminMatch = ADMIN_CREDENTIALS.find(
@@ -37,23 +37,23 @@ export async function POST(request) {
     }
 
     // ── 2. Cari User di Database ──
-    const isEmail = identifier.includes('@');
-    let { data: user, error: userError } = isEmail
-      ? await supabase.from('users').select('*').eq('email', identifier.toLowerCase()).maybeSingle()
-      : await supabase.from('users').select('*').eq('npm', identifier).maybeSingle();
+    let { data: user, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', identifier.toLowerCase())
+      .maybeSingle();
 
     // ── 3. LOGIKA AUTO-REGISTER (Tambahkan di sini) ──
     if (!user) {
       // Hanya auto-register jika yang dimasukkan adalah email Unsil valid
-      if (isEmail && isUniversityEmail(identifier)) {
+      if (isUniversityEmail(identifier)) {
         const { data: newUser, error: regError } = await supabase
           .from('users')
           .insert([{ 
             email: identifier.toLowerCase(), 
-            password_hash: password, // Simpan plain text dulu agar sinkron dengan SQL Editor Anda
+            password_hash: password,
             nama: identifier.split('@')[0], 
             role: 'student', 
-            npm: isEmail ? null : identifier, // Jika input NPM, masukkan ke kolom NPM
             is_active: true 
           }])
           .select()
@@ -62,7 +62,7 @@ export async function POST(request) {
         if (regError) return jsonResponse({ error: 'Gagal registrasi otomatis' }, 500);
         user = newUser;
       } else {
-        return jsonResponse({ error: 'Email/NPM tidak terdaftar' }, 401);
+        return jsonResponse({ error: 'Email tidak terdaftar' }, 401);
       }
     }
 
@@ -85,7 +85,7 @@ export async function POST(request) {
     }
 
     if (!isValid)
-      return jsonResponse({ error: 'Email/NPM atau password salah' }, 401);
+      return jsonResponse({ error: 'Email atau password salah' }, 401);
 
     // ── 5. Response Sukses ──
     const token = generateToken(user);
@@ -95,7 +95,6 @@ export async function POST(request) {
         id: user.id,
         email: user.email,
         nama: user.nama,
-        npm: user.npm,
         role: user.role,
         avatar_url: user.avatar_url,
       },
