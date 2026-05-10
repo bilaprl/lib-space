@@ -39,22 +39,42 @@ export async function GET(request) {
       if (sd) { favoriteSeat = sd.label; favoriteType = sd.shape === 'circle' ? 'Bundar' : 'Meja'; }
     }
 
+    // Gunakan WIB (UTC+7) untuk chart 7 hari terakhir
+    const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
     const last7Days = [];
     for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      const dayName = date.toLocaleDateString('id-ID', { weekday: 'short' });
+      const now = new Date();
+      const nowWib = new Date(now.getTime() + WIB_OFFSET_MS);
+      nowWib.setUTCDate(nowWib.getUTCDate() - i);
+      const dateStr = nowWib.toISOString().split('T')[0];
+      const dayName = new Date(dateStr + 'T00:00:00+07:00').toLocaleDateString('id-ID', { weekday: 'short', timeZone: 'Asia/Jakarta' });
+      
       let dayHours = 0;
       for (const r of completedRes || []) {
-        if (r.started_at?.startsWith(dateStr)) {
-          if (r.duration_type?.includes('2 Jam')) dayHours += 2;
-          else if (r.duration_type?.includes('4 Jam')) dayHours += 4;
-          else if (r.duration_type?.includes('Seharian')) dayHours += 8;
-          else dayHours += 2;
+        if (!r.started_at) continue;
+        // Konversi started_at ke tanggal WIB
+        const startWib = new Date(new Date(r.started_at).getTime() + WIB_OFFSET_MS);
+        const startDateStr = startWib.toISOString().split('T')[0];
+        if (startDateStr === dateStr) {
+          if (r.started_at && r.ended_at) {
+            const diffMs = new Date(r.ended_at) - new Date(r.started_at);
+            if (diffMs < 60000) {
+              if (r.duration_type?.includes('2 Jam')) dayHours += 2;
+              else if (r.duration_type?.includes('4 Jam')) dayHours += 4;
+              else if (r.duration_type?.includes('Seharian')) dayHours += 8;
+              else dayHours += 2;
+            } else {
+              dayHours += diffMs / 3600000;
+            }
+          } else {
+            if (r.duration_type?.includes('2 Jam')) dayHours += 2;
+            else if (r.duration_type?.includes('4 Jam')) dayHours += 4;
+            else if (r.duration_type?.includes('Seharian')) dayHours += 8;
+            else dayHours += 2;
+          }
         }
       }
-      last7Days.push({ day: dayName, hours: dayHours });
+      last7Days.push({ day: dayName, hours: Math.round(dayHours * 10) / 10 });
     }
 
     return Response.json({ totalHours: Math.round(totalHours), totalSessions: completedRes?.length || 0, favoriteSeat, favoriteType, last7Days });
@@ -63,4 +83,4 @@ export async function GET(request) {
   }
 }
 
-export async function OPTIONS() { return Response.json({}); }
+export async function OPTIONS() { return Response.json({}); }

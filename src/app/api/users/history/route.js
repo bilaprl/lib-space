@@ -22,22 +22,48 @@ export async function GET(request) {
 
     const statusMap = { active: 'Aktif', completed: 'Selesai', cancelled: 'Batal', expired: 'Kedaluwarsa' };
 
+    const WIB_TZ = 'Asia/Jakarta';
+
     const history = (reservations || []).map(r => {
       const seat = seatsMap[r.seat_id] || {};
       let durationLabel = r.duration_type || '-';
       if (r.started_at && r.ended_at) {
         const diffMs = new Date(r.ended_at) - new Date(r.started_at);
         if (diffMs < 60000) {
+          // Durasi sangat pendek (release cepat), tampilkan sesuai tipe yang dipilih
           if (r.duration_type?.includes('2 Jam')) durationLabel = '2 Jam';
           else if (r.duration_type?.includes('4 Jam')) durationLabel = '4 Jam';
+          else if (r.duration_type?.includes('Seharian')) durationLabel = 'Seharian';
           else durationLabel = '2 Jam';
-        } else durationLabel = `${Math.round(diffMs / 3600000)} Jam`;
+        } else {
+          const hours = diffMs / 3600000;
+          if (hours >= 1) {
+            durationLabel = `${Math.round(hours)} Jam`;
+          } else {
+            durationLabel = `${Math.round(diffMs / 60000)} Menit`;
+          }
+        }
+      } else if (r.duration_type) {
+        // Reservasi masih aktif, tampilkan tipe durasi
+        if (r.duration_type.includes('Seharian')) durationLabel = 'Seharian';
+        else durationLabel = r.duration_type;
       }
-      const start = new Date(r.started_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-      const end = r.ended_at ? new Date(r.ended_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : 'sekarang';
+
+      const startDate = new Date(r.started_at);
+      const start = startDate.toLocaleTimeString('id-ID', { 
+        hour: '2-digit', minute: '2-digit', timeZone: WIB_TZ 
+      });
+      const end = r.ended_at 
+        ? new Date(r.ended_at).toLocaleTimeString('id-ID', { 
+            hour: '2-digit', minute: '2-digit', timeZone: WIB_TZ 
+          }) 
+        : 'sekarang';
+
       return {
         id: `RES-${r.id.slice(0, 8).toUpperCase()}`,
-        date: new Date(r.started_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
+        date: startDate.toLocaleDateString('id-ID', { 
+          day: 'numeric', month: 'long', year: 'numeric', timeZone: WIB_TZ 
+        }),
         time: `${start} - ${end}`,
         seat: seat.label || r.seat_id,
         type: seat.shape === 'circle' ? 'Bundar' : 'Meja',
@@ -52,4 +78,4 @@ export async function GET(request) {
   }
 }
 
-export async function OPTIONS() { return Response.json({}); }
+export async function OPTIONS() { return Response.json({}); }
