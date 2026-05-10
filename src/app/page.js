@@ -821,11 +821,10 @@ export default function Home() {
                         <button
                           key={i}
                           onClick={() => setHistoryPage(i + 1)}
-                          className={`w-9 h-9 rounded-xl text-xs font-bold transition-all ${
-                            historyPage === i + 1
+                          className={`w-9 h-9 rounded-xl text-xs font-bold transition-all ${historyPage === i + 1
                               ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
                               : 'border border-slate-200 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600'
-                          }`}
+                            }`}
                         >
                           {i + 1}
                         </button>
@@ -914,17 +913,15 @@ export default function Home() {
                         </div>
                         {/* Bar */}
                         <div
-                          className={`w-6 sm:w-10 rounded-t-lg sm:rounded-t-xl transition-all duration-500 ${
-                            isToday ? 'bg-emerald-500 group-hover:bg-emerald-400 shadow-lg shadow-emerald-200' :
-                            item.hours > 0 ? 'bg-emerald-400 group-hover:bg-emerald-500' :
-                            'bg-slate-200 group-hover:bg-slate-300'
-                          }`}
+                          className={`w-6 sm:w-10 rounded-t-lg sm:rounded-t-xl transition-all duration-500 ${isToday ? 'bg-emerald-500 group-hover:bg-emerald-400 shadow-lg shadow-emerald-200' :
+                              item.hours > 0 ? 'bg-emerald-400 group-hover:bg-emerald-500' :
+                                'bg-slate-200 group-hover:bg-slate-300'
+                            }`}
                           style={{ height: `${pct}%`, minHeight: '8px' }}
                         ></div>
                         {/* Day label */}
-                        <span className={`mt-2 sm:mt-3 text-[9px] sm:text-xs font-bold ${
-                          isToday ? 'text-emerald-600' : 'text-slate-400'
-                        }`}>{item.day}</span>
+                        <span className={`mt-2 sm:mt-3 text-[9px] sm:text-xs font-bold ${isToday ? 'text-emerald-600' : 'text-slate-400'
+                          }`}>{item.day}</span>
                       </div>
                     );
                   })}
@@ -1024,7 +1021,8 @@ export default function Home() {
         </div>
       )}
 
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0');
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slideInRight { from { opacity: 0; transform: translateX(100px); } to { opacity: 1; transform: translateX(0); } }
@@ -1034,16 +1032,14 @@ export default function Home() {
       {/* CUSTOM TOAST NOTIFICATION */}
       {toast && (
         <div className="fixed top-6 right-6 z-[200] animate-[slideInRight_0.3s_ease-out]">
-          <div className={`flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl border backdrop-blur-md max-w-sm ${
-            toast.type === 'success' ? 'bg-emerald-50/95 border-emerald-200 text-emerald-800' :
-            toast.type === 'warning' ? 'bg-amber-50/95 border-amber-200 text-amber-800' :
-            'bg-rose-50/95 border-rose-200 text-rose-800'
-          }`}>
-            <span className={`material-symbols-outlined text-xl flex-shrink-0 ${
-              toast.type === 'success' ? 'text-emerald-500' :
-              toast.type === 'warning' ? 'text-amber-500' :
-              'text-rose-500'
+          <div className={`flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl border backdrop-blur-md max-w-sm ${toast.type === 'success' ? 'bg-emerald-50/95 border-emerald-200 text-emerald-800' :
+              toast.type === 'warning' ? 'bg-amber-50/95 border-amber-200 text-amber-800' :
+                'bg-rose-50/95 border-rose-200 text-rose-800'
             }`}>
+            <span className={`material-symbols-outlined text-xl flex-shrink-0 ${toast.type === 'success' ? 'text-emerald-500' :
+                toast.type === 'warning' ? 'text-amber-500' :
+                  'text-rose-500'
+              }`}>
               {toast.type === 'success' ? 'check_circle' : toast.type === 'warning' ? 'warning' : 'error'}
             </span>
             <p className="text-sm font-semibold leading-snug">{toast.message}</p>
