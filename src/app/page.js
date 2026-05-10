@@ -98,6 +98,7 @@ export default function Home() {
   const [stats, setStats] = useState(null);
   const [toast, setToast] = useState(null);
   const [historyPage, setHistoryPage] = useState(1);
+  const [countdown, setCountdown] = useState(null);
   const HISTORY_PER_PAGE = 5;
 
   const currentUserRef = useRef(null);
@@ -127,6 +128,48 @@ export default function Home() {
     socketRef.current?.emit('seat_changed');
     fetchSeats();
   }, [fetchSeats]);
+
+  // ==========================================
+  // COUNTDOWN TIMER untuk kursi booked
+  // ==========================================
+  useEffect(() => {
+    if (myBookedSeats.length === 0) {
+      setCountdown(null);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      // Cari waktu expired dari kursi booked user
+      const bookedSeat = seats.find(
+        (s) => myBookedSeats.includes(s.id) && s.lock_expires_at
+      );
+
+      if (!bookedSeat?.lock_expires_at) {
+        setCountdown(null);
+        return;
+      }
+
+      const endTime = new Date(bookedSeat.lock_expires_at);
+      const now = new Date();
+      const diffMs = endTime - now;
+
+      if (diffMs <= 0) {
+        // Waktu habis! Auto-release
+        setCountdown(null);
+        clearInterval(timer);
+        showToast('⏰ Waktu reservasi habis! Kursi otomatis dilepas.', 'warning');
+        notifySeatChange();
+        return;
+      }
+
+      const hours = Math.floor(diffMs / 3600000);
+      const minutes = Math.floor((diffMs % 3600000) / 60000);
+      const seconds = Math.floor((diffMs % 60000) / 1000);
+      setCountdown({ hours, minutes, seconds, totalMs: diffMs });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [myBookedSeats, seats, notifySeatChange]);
 
   // Toast notification system
   const showToast = useCallback((message, type = 'error') => {
@@ -643,34 +686,75 @@ export default function Home() {
           {activeTab === "map" && (
             <>
               {myBookedSeats.length > 0 && (
-                <div className="bg-emerald-800 rounded-3xl shadow-2xl relative overflow-hidden border border-emerald-700 p-5 sm:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 animate-[fadeIn_0.5s_ease-out]">
+                <div className="bg-emerald-800 rounded-3xl shadow-2xl relative overflow-hidden border border-emerald-700 p-5 sm:p-8 animate-[fadeIn_0.5s_ease-out]">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none"></div>
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 relative z-10 w-full md:w-auto">
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-emerald-300 text-3xl sm:text-4xl">confirmation_number</span>
-                      <div>
-                        <h2 className="font-bold text-lg sm:text-xl text-white leading-tight">Tiket Aktifmu</h2>
-                        <span className="text-[10px] sm:text-xs text-emerald-200">Sedang Digunakan</span>
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 relative z-10 w-full md:w-auto">
+                      <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-emerald-300 text-3xl sm:text-4xl">confirmation_number</span>
+                        <div>
+                          <h2 className="font-bold text-lg sm:text-xl text-white leading-tight">Tiket Aktifmu</h2>
+                          <span className="text-[10px] sm:text-xs text-emerald-200">Sedang Digunakan</span>
+                        </div>
+                      </div>
+                      <div className="hidden sm:block w-px h-10 bg-emerald-600"></div>
+                      <div className="flex flex-wrap gap-2">
+                        {myBookedSeats.map((id) => {
+                          const labelId = seatsConfig.find((s) => s.id === id)?.label || id;
+                          return (
+                            <span key={id} className="bg-white text-emerald-800 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-black shadow-lg text-base sm:text-lg">
+                              {labelId}
+                            </span>
+                          );
+                        })}
                       </div>
                     </div>
-                    <div className="hidden sm:block w-px h-10 bg-emerald-600"></div>
-                    <div className="flex flex-wrap gap-2">
-                      {myBookedSeats.map((id) => {
-                        const labelId = seatsConfig.find((s) => s.id === id)?.label || id;
-                        return (
-                          <span key={id} className="bg-white text-emerald-800 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-black shadow-lg text-base sm:text-lg">
-                            {labelId}
-                          </span>
-                        );
-                      })}
-                    </div>
+                    <button
+                      onClick={releaseMySeats}
+                      className="w-full md:w-auto px-6 py-3.5 sm:py-4 text-sm font-bold text-rose-100 bg-rose-500/20 border border-rose-500/30 rounded-xl hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-2 relative z-10 flex-shrink-0"
+                    >
+                      Selesai Belajar
+                    </button>
                   </div>
-                  <button
-                    onClick={releaseMySeats}
-                    className="w-full md:w-auto px-6 py-3.5 sm:py-4 text-sm font-bold text-rose-100 bg-rose-500/20 border border-rose-500/30 rounded-xl hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-2 relative z-10 flex-shrink-0"
-                  >
-                    Selesai Belajar
-                  </button>
+
+                  {/* COUNTDOWN TIMER */}
+                  {countdown && (
+                    <div className="mt-5 pt-5 border-t border-emerald-600/50 relative z-10">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="material-symbols-outlined text-amber-300 text-xl animate-pulse">timer</span>
+                        <span className="text-sm font-semibold text-emerald-200">Sisa Waktu Reservasi</span>
+                      </div>
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="bg-emerald-900/80 border border-emerald-600/50 rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-center min-w-[60px] sm:min-w-[72px]">
+                          <div className="text-2xl sm:text-3xl font-black text-white tabular-nums">
+                            {String(countdown.hours).padStart(2, '0')}
+                          </div>
+                          <div className="text-[8px] sm:text-[9px] font-bold text-emerald-300 uppercase tracking-widest mt-0.5">Jam</div>
+                        </div>
+                        <span className="text-2xl font-black text-emerald-400 animate-pulse">:</span>
+                        <div className="bg-emerald-900/80 border border-emerald-600/50 rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-center min-w-[60px] sm:min-w-[72px]">
+                          <div className="text-2xl sm:text-3xl font-black text-white tabular-nums">
+                            {String(countdown.minutes).padStart(2, '0')}
+                          </div>
+                          <div className="text-[8px] sm:text-[9px] font-bold text-emerald-300 uppercase tracking-widest mt-0.5">Menit</div>
+                        </div>
+                        <span className="text-2xl font-black text-emerald-400 animate-pulse">:</span>
+                        <div className="bg-emerald-900/80 border border-emerald-600/50 rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-center min-w-[60px] sm:min-w-[72px]">
+                          <div className="text-2xl sm:text-3xl font-black text-white tabular-nums">
+                            {String(countdown.seconds).padStart(2, '0')}
+                          </div>
+                          <div className="text-[8px] sm:text-[9px] font-bold text-emerald-300 uppercase tracking-widest mt-0.5">Detik</div>
+                        </div>
+                        {/* Warning jika kurang dari 10 menit */}
+                        {countdown.totalMs < 600000 && (
+                          <div className="ml-2 sm:ml-4 px-3 py-1.5 bg-amber-500/20 border border-amber-500/40 rounded-lg text-amber-300 text-xs font-bold flex items-center gap-1.5 animate-pulse">
+                            <span className="material-symbols-outlined text-sm">warning</span>
+                            Segera Habis!
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -822,8 +906,8 @@ export default function Home() {
                           key={i}
                           onClick={() => setHistoryPage(i + 1)}
                           className={`w-9 h-9 rounded-xl text-xs font-bold transition-all ${historyPage === i + 1
-                              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
-                              : 'border border-slate-200 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600'
+                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
+                            : 'border border-slate-200 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600'
                             }`}
                         >
                           {i + 1}
@@ -914,8 +998,8 @@ export default function Home() {
                         {/* Bar */}
                         <div
                           className={`w-6 sm:w-10 rounded-t-lg sm:rounded-t-xl transition-all duration-500 ${isToday ? 'bg-emerald-500 group-hover:bg-emerald-400 shadow-lg shadow-emerald-200' :
-                              item.hours > 0 ? 'bg-emerald-400 group-hover:bg-emerald-500' :
-                                'bg-slate-200 group-hover:bg-slate-300'
+                            item.hours > 0 ? 'bg-emerald-400 group-hover:bg-emerald-500' :
+                              'bg-slate-200 group-hover:bg-slate-300'
                             }`}
                           style={{ height: `${pct}%`, minHeight: '8px' }}
                         ></div>
@@ -1033,12 +1117,12 @@ export default function Home() {
       {toast && (
         <div className="fixed top-6 right-6 z-[200] animate-[slideInRight_0.3s_ease-out]">
           <div className={`flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl border backdrop-blur-md max-w-sm ${toast.type === 'success' ? 'bg-emerald-50/95 border-emerald-200 text-emerald-800' :
-              toast.type === 'warning' ? 'bg-amber-50/95 border-amber-200 text-amber-800' :
-                'bg-rose-50/95 border-rose-200 text-rose-800'
+            toast.type === 'warning' ? 'bg-amber-50/95 border-amber-200 text-amber-800' :
+              'bg-rose-50/95 border-rose-200 text-rose-800'
             }`}>
             <span className={`material-symbols-outlined text-xl flex-shrink-0 ${toast.type === 'success' ? 'text-emerald-500' :
-                toast.type === 'warning' ? 'text-amber-500' :
-                  'text-rose-500'
+              toast.type === 'warning' ? 'text-amber-500' :
+                'text-rose-500'
               }`}>
               {toast.type === 'success' ? 'check_circle' : toast.type === 'warning' ? 'warning' : 'error'}
             </span>
