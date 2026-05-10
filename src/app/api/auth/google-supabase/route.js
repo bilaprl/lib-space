@@ -24,7 +24,7 @@ export async function POST(request) {
       const insertData = {
         email: email.toLowerCase(),
         nama: nama || email.split('@')[0],
-        role: 'mahasiswa',
+        role: 'student',
         is_active: true,
       };
 
