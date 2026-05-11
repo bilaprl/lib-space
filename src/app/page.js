@@ -394,8 +394,8 @@ export default function Home() {
 
     if (seat.status !== "available") return;
 
-    if (pendingSeats.length >= 3) {
-      showToast("Maksimal pemesanan dalam satu waktu adalah 3 kursi.", "warning");
+    if (pendingSeats.length >= 4) {
+      showToast("Maksimal pemesanan dalam satu waktu adalah 4 kursi.", "warning");
       return;
     }
 
