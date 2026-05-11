@@ -745,8 +745,8 @@ export default function Home() {
                           </div>
                           <div className="text-[8px] sm:text-[9px] font-bold text-emerald-300 uppercase tracking-widest mt-0.5">Detik</div>
                         </div>
-                        {/* Warning jika kurang dari 10 menit */}
-                        {countdown.totalMs < 600000 && (
+                        {/* Warning jika kurang dari 3 menit */}
+                        {countdown.totalMs < 180000 && (
                           <div className="ml-2 sm:ml-4 px-3 py-1.5 bg-amber-500/20 border border-amber-500/40 rounded-lg text-amber-300 text-xs font-bold flex items-center gap-1.5 animate-pulse">
                             <span className="material-symbols-outlined text-sm">warning</span>
                             Segera Habis!
