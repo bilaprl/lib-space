@@ -101,6 +101,12 @@ export default function Home() {
   const [countdown, setCountdown] = useState(null);
   const HISTORY_PER_PAGE = 5;
 
+  // Mengembalikan fungsi Toast yang sempat hilang agar tidak error
+  const showToast = useCallback((message, type = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
+
   const currentUserRef = useRef(null);
   const socketRef = useRef(null);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
@@ -169,7 +175,7 @@ export default function Home() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [myBookedSeats, seats, notifySeatChange]);
+  }, [myBookedSeats, seats, notifySeatChange, showToast]);
 
 
   // ==========================================
@@ -426,6 +432,27 @@ export default function Home() {
     }
     setIsModalOpen(false);
   };
+
+  // ==========================================
+  // AUTO-RELEASE KURSI PENDING (3 MENIT)
+  // ==========================================
+  useEffect(() => {
+    let timeoutId;
+
+    if (pendingSeats.length > 0) {
+      timeoutId = setTimeout(() => {
+        cancelAllPending();
+        showToast("Waktu pemilihan habis (3 menit). Kursi yang Anda pilih telah dilepaskan kembali oleh sistem.", "warning");
+      }, 180000); 
+    }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSeats]); // Hanya render ulang jika pilihan pending berubah
 
   // ==========================================
   // KONFIRMASI CHECKOUT
