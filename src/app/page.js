@@ -197,7 +197,6 @@ export default function Home() {
     };
   }, [pendingSeats, cancelAllPending]);
 
-  // Toast notification system
   const showToast = useCallback((message, type = 'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
