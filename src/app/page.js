@@ -171,6 +171,32 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [myBookedSeats, seats, notifySeatChange]);
 
+  // ==========================================
+  // AUTO-RELEASE KURSI PENDING (3 MENIT)
+  // ==========================================
+  useEffect(() => {
+    let timeoutId;
+
+    if (pendingSeats.length > 0) {
+      // Set timer selama 3 Menit (180.000 ms)
+      timeoutId = setTimeout(() => {
+        cancelAllPending();
+        
+        showToast(
+          "Waktu pemilihan habis (3 menit). Kursi yang Anda pilih telah dilepaskan kembali oleh sistem.", 
+          "warning"
+        );
+      }, 180000); 
+    }
+
+    // Bersihkan timer jika user merubah pilihan atau menekan checkout sebelum 3 menit habis
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [pendingSeats, cancelAllPending]);
+
   // Toast notification system
   const showToast = useCallback((message, type = 'error') => {
     setToast({ message, type });
